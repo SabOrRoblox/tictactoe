@@ -1,545 +1,64 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:confetti/confetti.dart';
 import 'dart:async';
 
-void main() {
-  runApp(const TicTacToeApp());
+void main() => runApp(const SnakeGameApp());
+
+class SnakeGameApp extends StatelessWidget {
+  const SnakeGameApp({super.key});
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'Snow Snake',
+        theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: const Color(0xFF0a1a2f)),
+        debugShowCheckedModeBanner: false,
+        home: const MenuScreen(),
+      );
 }
 
-class TicTacToeApp extends StatelessWidget {
-  const TicTacToeApp({super.key});
-
+class MenuScreen extends StatefulWidget {
+  const MenuScreen({super.key});
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Крестики-Нолики Делюкс',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.purple,
-        scaffoldBackgroundColor: Colors.black,
-        fontFamily: 'Poppins',
-      ),
-      debugShowCheckedModeBanner: false,
-      home: const GamePage(),
-    );
-  }
+  State<MenuScreen> createState() => _MenuScreenState();
 }
 
-class GamePage extends StatefulWidget {
-  const GamePage({super.key});
-
-  @override
-  State<GamePage> createState() => _GamePageState();
-}
-
-class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
-  late List<String> board;
-  bool isPlayerTurn = true;
-  String message = '✨ ТВОЙ ХОД ✨';
-  int scorePlayer = 0;
-  int scoreBot = 0;
-  int currentRound = 1;
-  
-  late ConfettiController _confettiController;
-  late AnimationController _glowController;
-  late AnimationController _pulseController;
-  late AnimationController _shakeController;
-  
-  List<int> winningCombination = [];
-  bool gameEnded = false;
-  
-  final Random _random = Random();
-
-  @override
-  void initState() {
-    super.initState();
-    _resetBoard();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
-    
-    _glowController = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat(reverse: true);
-    
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    )..repeat();
-    
-    _shakeController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-  }
-
-  @override
-  void dispose() {
-    _confettiController.dispose();
-    _glowController.dispose();
-    _pulseController.dispose();
-    _shakeController.dispose();
-    super.dispose();
-  }
-
-  void _resetBoard() {
-    setState(() {
-      board = List.filled(9, '');
-      isPlayerTurn = true;
-      gameEnded = false;
-      winningCombination = [];
-      message = '✨ ТВОЙ ХОД ✨';
-      if (!isPlayerTurn) {
-        _botMove();
-      }
-    });
-  }
-
-  void _newRound() {
-    setState(() {
-      board = List.filled(9, '');
-      isPlayerTurn = true;
-      gameEnded = false;
-      winningCombination = [];
-      message = '✨ РАУНД ${currentRound + 1} ✨';
-      currentRound++;
-    });
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      setState(() {
-        message = '✨ ТВОЙ ХОД ✨';
-      });
-    });
-  }
-
-  void _makeMove(int index) async {
-    if (!isPlayerTurn || board[index] != '' || gameEnded) return;
-
-    // Анимация нажатия
-    await _shakeController.forward();
-    _shakeController.reset();
-
-    setState(() {
-      board[index] = 'X';
-    });
-
-    String? winner = _checkWinner();
-    if (winner != null) {
-      _endGame(winner);
-      return;
-    }
-
-    if (_isBoardFull()) {
-      _endGame('draw');
-      return;
-    }
-
-    setState(() {
-      isPlayerTurn = false;
-      message = '🤖 ХОД БОТА 🤖';
-    });
-
-    // Задержка перед ходом бота для драматизма
-    Future.delayed(const Duration(milliseconds: 600), _botMove);
-  }
-
-  void _botMove() {
-    if (gameEnded) return;
-    
-    int index = _getBestMove();
-    
-    if (index != -1) {
-      setState(() {
-        board[index] = 'O';
-      });
-
-      String? winner = _checkWinner();
-      if (winner != null) {
-        _endGame(winner);
-        return;
-      }
-
-      if (_isBoardFull()) {
-        _endGame('draw');
-        return;
-      }
-
-      setState(() {
-        isPlayerTurn = true;
-        message = '✨ ТВОЙ ХОД ✨';
-      });
-    }
-  }
-
-  int _getBestMove() {
-    // 1. Победа бота
-    for (int i = 0; i < 9; i++) {
-      if (board[i] == '') {
-        board[i] = 'O';
-        if (_checkWinner() == 'O') {
-          board[i] = '';
-          return i;
-        }
-        board[i] = '';
-      }
-    }
-
-    // 2. Блокировка игрока
-    for (int i = 0; i < 9; i++) {
-      if (board[i] == '') {
-        board[i] = 'X';
-        if (_checkWinner() == 'X') {
-          board[i] = '';
-          return i;
-        }
-        board[i] = '';
-      }
-    }
-
-    // 3. Центр
-    if (board[4] == '') return 4;
-
-    // 4. Углы
-    List<int> corners = [0, 2, 6, 8];
-    List<int> availableCorners = corners.where((i) => board[i] == '').toList();
-    if (availableCorners.isNotEmpty) {
-      return availableCorners[_random.nextInt(availableCorners.length)];
-    }
-
-    // 5. Любой свободный
-    List<int> available = [];
-    for (int i = 0; i < 9; i++) {
-      if (board[i] == '') available.add(i);
-    }
-    return available.isNotEmpty ? available[_random.nextInt(available.length)] : -1;
-  }
-
-  bool _isBoardFull() {
-    return board.every((cell) => cell != '');
-  }
-
-  String? _checkWinner() {
-    List<List<int>> winPatterns = [
-      [0, 1, 2], [3, 4, 5], [6, 7, 8],
-      [0, 3, 6], [1, 4, 7], [2, 5, 8],
-      [0, 4, 8], [2, 4, 6]
-    ];
-
-    for (var pattern in winPatterns) {
-      String a = board[pattern[0]];
-      String b = board[pattern[1]];
-      String c = board[pattern[2]];
-      if (a != '' && a == b && b == c) {
-        winningCombination = pattern;
-        return a;
-      }
-    }
-    return null;
-  }
-
-  void _endGame(String winner) async {
-    gameEnded = true;
-    
-    if (winner == 'X') {
-      scorePlayer++;
-      message = '🎉 ПОБЕДА! 🎉';
-      _confettiController.play();
-      await Future.delayed(const Duration(seconds: 3));
-      _confettiController.stop();
-    } else if (winner == 'O') {
-      scoreBot++;
-      message = '😢 БОТ ПОБЕДИЛ 😢';
-    } else {
-      message = '🤝 НИЧЬЯ 🤝';
-    }
-
-    setState(() {});
-
-    await Future.delayed(const Duration(seconds: 2));
-    
-    if (scorePlayer >= 5 || scoreBot >= 5) {
-      _showGameOverDialog();
-    } else {
-      _newRound();
-    }
-  }
-
-  void _showGameOverDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: Text(
-          scorePlayer > scoreBot ? '🏆 ТЫ ПОБЕДИЛ! 🏆' : '💀 БОТ ПОБЕДИЛ 💀',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        content: Text(
-          'ФИНАЛЬНЫЙ СЧЕТ: ${scorePlayer} : ${scoreBot}',
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 20, color: Colors.white70),
-        ),
-        actions: [
-          Center(
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  scorePlayer = 0;
-                  scoreBot = 0;
-                  currentRound = 1;
-                });
-                _resetBoard();
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              ),
-              child: const Text('НОВАЯ ИГРА', style: TextStyle(fontSize: 18)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCell(int index) {
-    bool isWinning = winningCombination.contains(index);
-    
-    return GestureDetector(
-      onTap: () => _makeMove(index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.elasticOut,
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          gradient: isWinning
-              ? const LinearGradient(
-                  colors: [Colors.green, Colors.lightGreen],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : LinearGradient(
-                  colors: board[index] != ''
-                      ? [Colors.grey[800]!, Colors.grey[900]!]
-                      : [Colors.grey[850]!, Colors.grey[900]!],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isWinning
-              ? [
-                  BoxShadow(
-                    color: Colors.green.withOpacity(0.6),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  )
-                ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  )
-                ],
-          border: Border.all(
-            color: isWinning ? Colors.green : Colors.purple.withOpacity(0.3),
-            width: 2,
-          ),
-        ),
-        child: Center(
-          child: TweenAnimationBuilder(
-            duration: const Duration(milliseconds: 400),
-            tween: Tween<double>(begin: 0, end: 1),
-            builder: (context, double value, child) {
-              return Transform.scale(
-                scale: value,
-                child: child,
-              );
-            },
-            child: board[index] == 'X'
-                ? Icon(
-                    Icons.close,
-                    size: 60,
-                    color: Colors.cyanAccent,
-                    shadows: const [
-                      Shadow(blurRadius: 10, color: Colors.cyanAccent)
-                    ],
-                  )
-                : board[index] == 'O'
-                    ? Icon(
-                        Icons.circle_outlined,
-                        size: 55,
-                        color: Colors.pinkAccent,
-                        shadows: const [
-                          Shadow(blurRadius: 10, color: Colors.pinkAccent)
-                        ],
-                      )
-                    : const SizedBox(),
-          ),
-        ),
-      ),
-    );
-  }
-
+class _MenuScreenState extends State<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment.center,
+            center: Alignment.topCenter,
             radius: 1.5,
-            colors: [
-              Color(0xFF1a0033),
-              Color(0xFF000000),
-            ],
+            colors: [Color(0xFF1a3a5f), Color(0xFF0a1a2f)],
           ),
         ),
         child: SafeArea(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Верхняя панель с анимацией
-              AnimatedBuilder(
-                animation: _glowController,
-                builder: (context, child) {
-                  return Container(
-                    margin: const EdgeInsets.all(20),
-                    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.purple.withOpacity(0.3 + _glowController.value * 0.3),
-                          Colors.pink.withOpacity(0.3 + _glowController.value * 0.3),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildScoreCard('ТЫ', scorePlayer, Icons.emoji_emotions, Colors.cyan),
-                        _buildScoreCard('БОТ', scoreBot, Icons.memory, Colors.pink),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              
-              // Сообщение
-              AnimatedOpacity(
-                opacity: 1.0,
-                duration: const Duration(milliseconds: 500),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Colors.purple, Colors.deepPurple],
-                    ),
-                    borderRadius: BorderRadius.circular(50),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.purple.withOpacity(0.5),
-                        blurRadius: 20,
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    message,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
-                      color: Colors.white,
-                    ),
-                  ),
+              const Spacer(),
+              ShaderMask(
+                shaderCallback: (Rect bounds) => const LinearGradient(
+                  colors: [Colors.cyan, Colors.lightBlueAccent],
+                ).createShader(bounds),
+                child: const Text(
+                  '❄️ SNOW SNAKE ❄️',
+                  style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
-              
-              // Игровое поле
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.purple.withOpacity(0.3),
-                              blurRadius: 50,
-                              spreadRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 1,
-                          ),
-                          itemCount: 9,
-                          itemBuilder: (context, index) => _buildCell(index),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              
-              // Кнопка сброса
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, child) {
-                    return ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          scorePlayer = 0;
-                          scoreBot = 0;
-                          currentRound = 1;
-                        });
-                        _resetBoard();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                          side: BorderSide(
-                            color: Colors.white.withOpacity(0.5),
-                            width: 2,
-                          ),
-                        ),
-                        elevation: 10,
-                        shadowColor: Colors.purple,
-                      ),
-                      child: Text(
-                        'НОВАЯ ИГРА',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                          color: Colors.white.withOpacity(0.5 + _pulseController.value * 0.3),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              const SizedBox(height: 80),
+              _buildMenuButton('🎮 ИГРАТЬ', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GameScreen()))),
+              const SizedBox(height: 20),
+              _buildMenuButton('⚙️ НАСТРОЙКИ', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+              const SizedBox(height: 20),
+              _buildMenuButton('🛒 МАГАЗИН', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen()))),
+              const SizedBox(height: 20),
+              _buildMenuButton('🌐 МУЛЬТИПЛЕЕР', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiplayerScreen()))),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.all(12),
+                child: const Text('🐍 2025 | Winter Edition', style: TextStyle(color: Colors.white38)),
               ),
             ],
           ),
@@ -548,32 +67,422 @@ class _GamePageState extends State<GamePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildScoreCard(String title, int score, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 30),
-        const SizedBox(height: 5),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.white70,
-            letterSpacing: 1,
+  Widget _buildMenuButton(String text, VoidCallback onTap) => ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(40),
+            side: const BorderSide(color: Colors.cyan, width: 2),
           ),
         ),
-        const SizedBox(height: 5),
-        Text(
-          '$score',
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: color,
-            shadows: [
-              Shadow(blurRadius: 10, color: color),
+        child: Text(text, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+      );
+}
+
+class GameScreen extends StatefulWidget {
+  const GameScreen({super.key});
+  @override
+  State<GameScreen> createState() => _GameScreenState();
+}
+
+class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
+  late List<Snake> snakes;
+  late List<Food> foods;
+  late Timer gameTimer;
+  bool isGameRunning = true;
+  int playerScore = 0;
+  String playerName = "YOU";
+  final Random _random = Random();
+  late AnimationController _snowController;
+
+  @override
+  void initState() {
+    super.initState();
+    _snowController = AnimationController(duration: const Duration(seconds: 3), vsync: this)..repeat();
+    _initGame();
+  }
+
+  void _initGame() {
+    snakes = [
+      Snake(Offset(400, 300), Colors.yellow, playerName, true),
+      Snake(Offset(200, 300), Colors.red, "BOT_1", false),
+      Snake(Offset(600, 300), Colors.green, "BOT_2", false),
+      Snake(Offset(300, 400), Colors.orange, "BOT_3", false),
+      Snake(Offset(500, 200), Colors.purple, "BOT_4", false),
+    ];
+    foods = List.generate(8, (_) => Food(_randomOffset()));
+    playerScore = snakes.first.body.length;
+    gameTimer = Timer.periodic(const Duration(milliseconds: 80), (_) => _updateGame());
+  }
+
+  Offset _randomOffset() => Offset(50 + _random.nextInt(700).toDouble(), 50 + _random.nextInt(500).toDouble());
+
+  void _updateGame() {
+    if (!isGameRunning) return;
+    for (var snake in snakes) {
+      snake.move();
+      _checkFoodCollision(snake);
+    }
+    _checkCollisions();
+    setState(() {
+      playerScore = snakes.first.body.length;
+    });
+  }
+
+  void _checkFoodCollision(Snake snake) {
+    for (int i = 0; i < foods.length; i++) {
+      if ((snake.head - foods[i].position).distance < 15) {
+        snake.grow();
+        foods[i] = Food(_randomOffset());
+        break;
+      }
+    }
+  }
+
+  void _checkCollisions() {
+    for (int i = 0; i < snakes.length; i++) {
+      for (int j = 0; j < snakes.length; j++) {
+        if (i != j && snakes[i].isCollidingWith(snakes[j])) {
+          if (snakes[i].isPlayer) {
+            _gameOver();
+            return;
+          }
+        }
+      }
+      if (snakes[i].isOutOfBounds(Size(800, 600))) {
+        if (snakes[i].isPlayer) {
+          _gameOver();
+          return;
+        }
+      }
+    }
+  }
+
+  void _gameOver() {
+    isGameRunning = false;
+    gameTimer.cancel();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('💀 ВЫ УМЕРЛИ 💀', style: TextStyle(color: Colors.white)),
+        content: Text('Ваш размер: ${playerScore}', style: const TextStyle(color: Colors.white70, fontSize: 18)),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow[700]),
+            child: const Text('В МЕНЮ', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    gameTimer.cancel();
+    _snowController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: GestureDetector(
+        onPanUpdate: (details) {
+          if (!isGameRunning) return;
+          final snake = snakes.first;
+          if (details.delta.dx.abs() > details.delta.dy.abs()) {
+            snake.changeDirection(details.delta.dx > 0 ? Direction.right : Direction.left);
+          } else {
+            snake.changeDirection(details.delta.dy > 0 ? Direction.down : Direction.up);
+          }
+        },
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF1a3a5f), Color(0xFF0a1a2f)],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: SnowPainter(_snowController.value),
+                  size: Size.infinite,
+                ),
+              ),
+              Center(
+                child: Container(
+                  width: 800,
+                  height: 600,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.3), blurRadius: 30)],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: CustomPaint(
+                      painter: GamePainter(snakes, foods),
+                      size: const Size(800, 600),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Colors.cyan, Colors.blue]),
+                      borderRadius: BorderRadius.circular(40),
+                    ),
+                    child: Text('🐍 РАЗМЕР: $playerScore 🐍', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 20,
+                right: 20,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text('🏆 ЛИДЕРЫ 🏆', style: TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold)),
+                          ...snakes.map((s) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                child: Text('${s.name}: ${s.body.length}', style: TextStyle(color: s.color, fontWeight: FontWeight.bold)),
+                              )),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: isGameRunning ? null : () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.yellow[700],
+                        shape: const CircleBorder(),
+                        padding: const EdgeInsets.all(20),
+                      ),
+                      child: const Text('ИГРАТЬ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
+}
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Настройки'), backgroundColor: Colors.transparent),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('🎵 Звук: ВКЛ', style: TextStyle(fontSize: 24)),
+              const SizedBox(height: 20),
+              const Text('🐍 Скорость змей: НОРМАЛЬНАЯ', style: TextStyle(fontSize: 24)),
+              const SizedBox(height: 20),
+              ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Назад')),
+            ],
+          ),
+        ),
+      );
+}
+
+class ShopScreen extends StatelessWidget {
+  const ShopScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Магазин'), backgroundColor: Colors.transparent),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('✨ СКИНЫ ДЛЯ ЗМЕЙ ✨', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 30),
+              _buildSkin('🐍 КЛАССИЧЕСКАЯ', Colors.yellow),
+              _buildSkin('❄️ ЛЕДЯНАЯ', Colors.cyan),
+              _buildSkin('🔥 ОГНЕННАЯ', Colors.orange),
+              _buildSkin('💎 ЗОЛОТАЯ', Colors.amber),
+            ],
+          ),
+        ),
+      );
+  Widget _buildSkin(String name, Color color) => Padding(
+        padding: const EdgeInsets.all(8),
+        child: ElevatedButton(
+          onPressed: () {},
+          style: ElevatedButton.styleFrom(backgroundColor: color.withOpacity(0.3)),
+          child: Text(name, style: TextStyle(color: color, fontSize: 18)),
+        ),
+      );
+}
+
+class MultiplayerScreen extends StatelessWidget {
+  const MultiplayerScreen({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Мультиплеер'), backgroundColor: Colors.transparent),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('🌐 ПОИСК ИГРОКОВ...', style: TextStyle(fontSize: 24)),
+              const SizedBox(height: 30),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 30),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Отмена'),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+enum Direction { up, down, left, right }
+
+class Snake {
+  List<Offset> body;
+  Direction direction;
+  final Color color;
+  final String name;
+  final bool isPlayer;
+  Direction _nextDirection;
+
+  Snake(Offset start, this.color, this.name, this.isPlayer)
+      : body = [start, start - const Offset(20, 0), start - const Offset(40, 0)],
+        direction = Direction.right,
+        _nextDirection = Direction.right;
+
+  Offset get head => body.first;
+
+  void changeDirection(Direction newDir) {
+    if ((direction == Direction.left && newDir == Direction.right) ||
+        (direction == Direction.right && newDir == Direction.left) ||
+        (direction == Direction.up && newDir == Direction.down) ||
+        (direction == Direction.down && newDir == Direction.up)) return;
+    _nextDirection = newDir;
+  }
+
+  void move() {
+    direction = _nextDirection;
+    Offset newHead = head;
+    switch (direction) {
+      case Direction.up:
+        newHead += const Offset(0, -20);
+        break;
+      case Direction.down:
+        newHead += const Offset(0, 20);
+        break;
+      case Direction.left:
+        newHead += const Offset(-20, 0);
+        break;
+      case Direction.right:
+        newHead += const Offset(20, 0);
+        break;
+    }
+    body.insert(0, newHead);
+    body.removeLast();
+  }
+
+  void grow() {
+    body.add(body.last);
+  }
+
+  bool isCollidingWith(Snake other) {
+    for (var segment in body) {
+      if (other.body.contains(segment) && other.body.indexOf(segment) != 0) return true;
+    }
+    return false;
+  }
+
+  bool isOutOfBounds(Size size) {
+    return head.dx < 0 || head.dx > size.width || head.dy < 0 || head.dy > size.height;
+  }
+}
+
+class Food {
+  final Offset position;
+  Food(this.position);
+}
+
+class GamePainter extends CustomPainter {
+  final List<Snake> snakes;
+  final List<Food> foods;
+
+  GamePainter(this.snakes, this.foods);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = const Color(0xFF0a1a2f));
+    for (var food in foods) {
+      final paint = Paint()..color = Colors.red;
+      canvas.drawCircle(food.position, 8, paint);
+      canvas.drawCircle(food.position, 4, Paint()..color = Colors.white);
+    }
+    for (var snake in snakes) {
+      for (int i = 0; i < snake.body.length; i++) {
+        final paint = Paint()..color = snake.color.withOpacity(1.0 - (i * 0.02));
+        canvas.drawCircle(snake.body[i], 12, paint);
+        if (i == 0) {
+          canvas.drawCircle(snake.body[i], 14, Paint()..color = snake.color);
+          canvas.drawCircle(snake.body[i] + const Offset(-5, -5), 4, Paint()..color = Colors.white);
+          canvas.drawCircle(snake.body[i] + const Offset(5, -5), 4, Paint()..color = Colors.white);
+          canvas.drawCircle(snake.body[i] + const Offset(0, 5), 3, Paint()..color = Colors.black);
+        }
+      }
+      final textSpan = TextSpan(text: snake.name, style: TextStyle(color: snake.color, fontSize: 14, fontWeight: FontWeight.bold));
+      TextPainter(text: textSpan, textDirection: TextDirection.ltr)
+        ..layout()
+        ..paint(canvas, snake.head + const Offset(-20, -25));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant GamePainter oldDelegate) => true;
+}
+
+class SnowPainter extends CustomPainter {
+  final double progress;
+  SnowPainter(this.progress);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final random = Random(42);
+    for (int i = 0; i < 100; i++) {
+      final x = (random.nextDouble() * size.width + progress * 100) % size.width;
+      final y = (random.nextDouble() * size.height + progress * 50) % size.height;
+      canvas.drawCircle(Offset(x, y), 2, Paint()..color = Colors.white.withOpacity(0.5));
+    }
+  }
+  @override
+  bool shouldRepaint(covariant SnowPainter oldDelegate) => true;
 }

@@ -1,7 +1,7 @@
-name: snake_game
-description: Snow Snake X9 Protected
-version: 2.0.0+5
-publish_to: none
+# pubspec.yaml
+name: t3_elite
+description: Tic Tac Toe Elite
+version: 2.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -9,15 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  crypto: ^3.0.3
-  device_info_plus: ^9.1.0
-  connectivity_plus: ^5.0.1
+  web_socket_channel: ^2.4.0
   shared_preferences: ^2.2.2
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.1
+  crypto: ^3.0.3
+  connectivity_plus: ^5.0.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/back.png

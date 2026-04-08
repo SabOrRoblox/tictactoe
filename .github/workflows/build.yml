@@ -1,4 +1,5 @@
-name: Build Protected APK
+# .github/workflows/build.yml
+name: Build T3 Elite APK
 
 on:
   push:
@@ -27,70 +28,56 @@ jobs:
     - name: Create Android structure
       run: |
         flutter create --platforms=android .
-        mkdir -p android/app/src/main/kotlin/com/x9/snake/secure
-        mkdir -p android/app/src/main/res/xml
-        
-    - name: Create MainActivity.kt
-      run: |
-        cat > android/app/src/main/kotlin/com/x9/snake/secure/MainActivity.kt << 'EOF'
-        package com.x9.snake.secure
-        import io.flutter.embedding.android.FlutterActivity
-        class MainActivity: FlutterActivity()
-        EOF
-        
-    - name: Create network_security_config.xml
-      run: |
-        cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <network-security-config>
-            <base-config cleartextTrafficPermitted="false">
-                <trust-anchors>
-                    <certificates src="system"/>
-                </trust-anchors>
-            </base-config>
-        </network-security-config>
-        EOF
-        
+        mkdir -p assets
+        curl -o assets/back.png https://picsum.photos/1080/1920?random
+    
     - name: Update AndroidManifest.xml
       run: |
-        sed -i 's/android:label="[^"]*"/android:label="Snow Snake X9"/g' android/app/src/main/AndroidManifest.xml
+        sed -i 's/android:label="[^"]*"/android:label="T3 Elite"/g' android/app/src/main/AndroidManifest.xml
         sed -i 's/android:allowBackup="[^"]*"/android:allowBackup="false"/g' android/app/src/main/AndroidManifest.xml
-        sed -i '/<application/a \        android:networkSecurityConfig="@xml/network_security_config"' android/app/src/main/AndroidManifest.xml
-        
+        sed -i '/<application/a \        android:usesCleartextTraffic="true"' android/app/src/main/AndroidManifest.xml
+    
     - name: Update build.gradle
       run: |
         sed -i 's/minSdkVersion .*/minSdkVersion 23/g' android/app/build.gradle
         sed -i 's/targetSdkVersion .*/targetSdkVersion 34/g' android/app/build.gradle
-        sed -i '/buildTypes {/a \        release {\n            minifyEnabled true\n            shrinkResources true\n            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\n        }' android/app/build.gradle
-        
-    - name: Create proguard-rules.pro
-      run: |
-        cat > android/app/proguard-rules.pro << 'EOF'
-        -flattenpackagehierarchy 'x9'
-        -repackageclasses 'x9'
-        -allowaccessmodification
-        -keep class io.flutter.app.** { *; }
-        -keep class io.flutter.plugin.** { *; }
-        -keep class io.flutter.util.** { *; }
-        -keep class io.flutter.view.** { *; }
-        -keep class io.flutter.** { *; }
-        -keep class io.flutter.plugins.** { *; }
-        EOF
-        
+        sed -i '/defaultConfig {/a \        multiDexEnabled true' android/app/build.gradle
+        sed -i '/defaultConfig {/a \        ndk {\n            abiFilters "armeabi-v7a", "arm64-v8a", "x86_64"\n        }' android/app/build.gradle
+        sed -i '/buildTypes {/a \        release {\n            minifyEnabled true\n            shrinkResources true\n        }' android/app/build.gradle
+        sed -i '/dependencies {/a \    implementation "androidx.multidex:multidex:2.0.1"' android/app/build.gradle
+    
     - name: Get dependencies
       run: flutter pub get
       
-    - name: Build APK with full protection
+    - name: Build APKs for all architectures
       run: |
         flutter build apk --release \
           --obfuscate \
           --split-debug-info=./debug_info \
-          --target-platform android-arm64 \
+          --target-platform android-arm,android-arm64,android-x64 \
           --shrink \
           --split-per-abi
           
-    - name: Upload APKs
+    - name: Upload armeabi-v7a APK
       uses: actions/upload-artifact@v4
       with:
-        name: snake-x9-protected
+        name: t3-elite-armeabi-v7a
+        path: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+        
+    - name: Upload arm64-v8a APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: t3-elite-arm64-v8a
+        path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+        
+    - name: Upload x86_64 APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: t3-elite-x86_64
+        path: build/app/outputs/flutter-apk/app-x86_64-release.apk
+        
+    - name: Upload all APKs
+      uses: actions/upload-artifact@v4
+      with:
+        name: t3-elite-all-architectures
         path: build/app/outputs/flutter-apk/*.apk

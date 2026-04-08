@@ -1,6 +1,7 @@
 name: snake_game
-description: Snow Snake - зимняя змейка с мультиплеером
-version: 1.0.0+1
+description: Snow Snake X9 Protected
+version: 2.0.0+5
+publish_to: none
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -8,10 +9,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  crypto: ^3.0.3
+  device_info_plus: ^9.1.0
+  connectivity_plus: ^5.0.1
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^3.0.1
 
 flutter:
   uses-material-design: true

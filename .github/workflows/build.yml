@@ -405,7 +405,7 @@ jobs:
 
       - name: Get signature hash
         run: |
-          APK_HASH=$(keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | grep SHA256 | awk '{print $2}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          APK_HASH=$(keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | grep -A1 "SHA256:" | tail -1 | awk '{print $2}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
           echo "APK_SIGNATURE_HASH=$APK_HASH" >> $GITHUB_ENV
           echo $APK_HASH > apk_signature_hash.txt
           echo "============================================"

@@ -1,4 +1,4 @@
-name: Build APK with Integrity Check
+name: Build APK
 
 on:
   push:
@@ -8,29 +8,28 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: '17'
-      
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
           channel: 'stable'
-      
-      - name: Create Flutter project structure
+
+      - name: Create project structure
         run: |
           flutter create --org com.example --project-name yourapp .
           mkdir -p android/app/src/main/kotlin/com/example/yourapp
-          mkdir -p .github/workflows
-      
+
       - name: Create MainActivity.kt
         run: |
-          cat > android/app/src/main/kotlin/com/example/yourapp/MainActivity.kt << 'KOTLINEOF'
+          cat > android/app/src/main/kotlin/com/example/yourapp/MainActivity.kt << 'EOF'
           package com.example.yourapp
 
           import io.flutter.embedding.android.FlutterActivity
@@ -44,7 +43,6 @@ jobs:
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
-                  
                   MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
                       if (call.method == "getSignatureHash") {
                           try {
@@ -60,25 +58,20 @@ jobs:
               }
 
               private fun getApkSignatureHash(): String {
-                  val packageInfo = packageManager.getPackageInfo(
-                      packageName, 
-                      PackageManager.GET_SIGNATURES
-                  )
+                  val packageInfo = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
                   val signature = packageInfo.signatures[0]
                   val md = MessageDigest.getInstance("SHA-256")
                   val hashBytes = md.digest(signature.toByteArray())
-                  val hash = hashBytes.joinToString("") { "%02x".format(it) }
-                  return hash
+                  return hashBytes.joinToString("") { "%02x".format(it) }
               }
           }
-          KOTLINEOF
-      
+          EOF
+
       - name: Create main.dart
         run: |
-          cat > lib/main.dart << 'DARTEOF'
+          cat > lib/main.dart << 'EOF'
           import 'package:flutter/material.dart';
           import 'package:flutter/services.dart';
-          import 'package:pointycastle/export.dart';
           import 'dart:convert';
           import 'dart:io';
           import 'package:path_provider/path_provider.dart';
@@ -86,7 +79,7 @@ jobs:
           import 'package:crypto/crypto.dart';
           import 'dart:typed_data';
           import 'package:flutter_keychain/flutter_keychain.dart';
-          import 'dart:async';
+          import 'package:pointycastle/export.dart' hide Padding, State;
 
           void main() {
             WidgetsFlutterBinding.ensureInitialized();
@@ -99,7 +92,6 @@ jobs:
 
           class MyApp extends StatelessWidget {
             const MyApp({super.key});
-
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
@@ -119,7 +111,6 @@ jobs:
 
           class SplashScreen extends StatefulWidget {
             const SplashScreen({super.key});
-
             @override
             State<SplashScreen> createState() => _SplashScreenState();
           }
@@ -141,10 +132,8 @@ jobs:
                 setState(() => _status = "Checking APK integrity...");
                 final integrityOk = await _checkApkIntegrity();
                 if (!integrityOk) throw Exception("Integrity check failed");
-
                 setState(() => _status = "Loading storage...");
                 final storageData = await _loadFromStorage();
-                
                 if (storageData != null) {
                   setState(() {
                     _decryptedData = storageData;
@@ -153,7 +142,7 @@ jobs:
                   });
                 } else {
                   setState(() {
-                    _status = "Storage loaded successfully\nNo encrypted data found";
+                    _status = "No data";
                     _ready = true;
                   });
                 }
@@ -168,16 +157,13 @@ jobs:
 
             Future<bool> _checkApkIntegrity() async {
               const channel = MethodChannel('app_integrity');
-              
               try {
                 final currentHash = await channel.invokeMethod('getSignatureHash');
                 final storedHash = await FlutterKeychain.get(key: 'apk_signature_hash');
-                
                 if (storedHash == null) {
                   await FlutterKeychain.put(key: 'apk_signature_hash', value: currentHash);
                   return true;
                 }
-                
                 return currentHash == storedHash;
               } catch (e) {
                 return false;
@@ -187,7 +173,6 @@ jobs:
             Future<String> _getDeviceFingerprint() async {
               final deviceInfo = DeviceInfoPlugin();
               String fingerprint = '';
-              
               if (Platform.isAndroid) {
                 final androidInfo = await deviceInfo.androidInfo;
                 fingerprint = '${androidInfo.brand}_${androidInfo.model}_${androidInfo.board}_${androidInfo.hardware}_${androidInfo.fingerprint}_${androidInfo.serialNumber}';
@@ -195,7 +180,6 @@ jobs:
                 final iosInfo = await deviceInfo.iosInfo;
                 fingerprint = '${iosInfo.model}_${iosInfo.identifierForVendor}_${iosInfo.utsname.machine}';
               }
-              
               final bytes = utf8.encode(fingerprint);
               final digest = sha256.convert(bytes);
               return digest.toString();
@@ -205,9 +189,7 @@ jobs:
               try {
                 final dir = await getApplicationDocumentsDirectory();
                 final file = File('${dir.path}/secure_data.enc');
-                
                 if (!file.existsSync()) return null;
-
                 final encryptedData = await file.readAsBytes();
                 final key = await _getOrCreateKey();
                 final decrypted = _decryptChacha20(encryptedData, key);
@@ -220,17 +202,13 @@ jobs:
             Future<Uint8List> _getOrCreateKey() async {
               try {
                 final existingKey = await FlutterKeychain.get(key: 'chacha_key');
-                if (existingKey != null) {
-                  return base64Decode(existingKey);
-                }
+                if (existingKey != null) return base64Decode(existingKey);
               } catch (_) {}
-
               final fingerprint = await _getDeviceFingerprint();
-              final salt = utf8.encode('secure_salt_2024');
+              final salt = utf8.encode('R7xQm2kL9pVn4Wz8');
               final keyMaterial = Uint8List.fromList(utf8.encode(fingerprint));
               final hashedKey = sha256.convert(keyMaterial + salt);
               final key = Uint8List.fromList(hashedKey.bytes);
-
               await FlutterKeychain.put(key: 'chacha_key', value: base64Encode(key));
               return key;
             }
@@ -274,68 +252,22 @@ jobs:
                             if (_error != null) ...[
                               const Icon(Icons.error_outline, color: Colors.red, size: 64),
                               const SizedBox(height: 32),
-                              Text(
-                                _error!,
-                                style: const TextStyle(
-                                  color: Colors.red,
-                                  fontSize: 14,
-                                  fontFamily: 'monospace',
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                              Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 14, fontFamily: 'monospace'), textAlign: TextAlign.center),
                             ],
                             if (_error == null && !_ready) ...[
-                              const CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                                strokeWidth: 2,
-                              ),
+                              const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white70), strokeWidth: 2),
                               const SizedBox(height: 32),
-                              Text(
-                                _status,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                  fontFamily: 'monospace',
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                              Text(_status, style: const TextStyle(color: Colors.white70, fontSize: 14, fontFamily: 'monospace'), textAlign: TextAlign.center),
                             ],
                             if (_error == null && _ready && _decryptedData.isNotEmpty) ...[
                               const Icon(Icons.lock_open, color: Colors.green, size: 48),
                               const SizedBox(height: 24),
-                              Text(
-                                _decryptedData,
-                                style: const TextStyle(
-                                  color: Colors.green,
-                                  fontSize: 16,
-                                  fontFamily: 'monospace',
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                            if (_error == null && _ready && _decryptedData.isEmpty) ...[
-                              const Icon(Icons.storage, color: Colors.white70, size: 48),
-                              const SizedBox(height: 24),
-                              const Text(
-                                "Storage empty",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
+                              Text(_decryptedData, style: const TextStyle(color: Colors.green, fontSize: 16, fontFamily: 'monospace'), textAlign: TextAlign.center),
                             ],
                             if (_ready && _error != null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 48),
-                                child: Text(
-                                  "Application will crash on exit",
-                                  style: TextStyle(
-                                    color: Colors.red.withOpacity(0.7),
-                                    fontSize: 12,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
+                                child: Text("App will crash on exit", style: TextStyle(color: Colors.red.withOpacity(0.7), fontSize: 12, fontFamily: 'monospace')),
                               ),
                           ],
                         ),
@@ -346,13 +278,13 @@ jobs:
               );
             }
           }
-          DARTEOF
-      
-      - name: Update pubspec.yaml
+          EOF
+
+      - name: Create pubspec.yaml
         run: |
-          cat > pubspec.yaml << 'PUBEOF'
+          cat > pubspec.yaml << 'EOF'
           name: yourapp
-          description: "Secure APK with integrity check"
+          description: "Secure APK"
           publish_to: 'none'
           version: 1.0.0+1
 
@@ -374,33 +306,15 @@ jobs:
 
           flutter:
             uses-material-design: true
-          PUBEOF
-      
-      - name: Update Android build.gradle
+          EOF
+
+      - name: Create build.gradle
         run: |
-          cat > android/app/build.gradle << 'GRADLEEOF'
+          cat > android/app/build.gradle << 'EOF'
           plugins {
               id "com.android.application"
               id "kotlin-android"
               id "dev.flutter.flutter-gradle-plugin"
-          }
-
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader ->
-                  localProperties.load(reader)
-              }
-          }
-
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-          if (flutterVersionCode == null) {
-              flutterVersionCode = '1'
-          }
-
-          def flutterVersionName = localProperties.getProperty('flutter.versionName')
-          if (flutterVersionName == null) {
-              flutterVersionName = '1.0'
           }
 
           def keystoreProperties = new Properties()
@@ -411,7 +325,7 @@ jobs:
 
           android {
               namespace "com.example.yourapp"
-              compileSdk 34
+              compileSdk 35
 
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
@@ -429,9 +343,9 @@ jobs:
               defaultConfig {
                   applicationId "com.example.yourapp"
                   minSdk 21
-                  targetSdk 34
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
+                  targetSdk 35
+                  versionCode 1
+                  versionName "1.0"
                   ndk {
                       abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
                   }
@@ -463,63 +377,40 @@ jobs:
           }
 
           dependencies {}
-          GRADLEEOF
-      
+          EOF
+
       - name: Create key.properties
         run: |
-          cat > android/key.properties << 'KEYEOF'
+          cat > android/key.properties << 'EOF'
           storeFile=release-keystore.jks
           storePassword=android
           keyPassword=android
           keyAlias=release
-          KEYEOF
-      
-      - name: Create keystore
+          EOF
+
+      - name: Generate keystore
         run: |
           keytool -genkey -v -keystore android/release-keystore.jks \
             -alias release -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android \
             -dname "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=Unknown"
-      
+
       - run: flutter pub get
-      
-      - name: Build APK (all architectures)
+
+      - name: Build APK
         run: |
           flutter build apk --release --obfuscate --split-debug-info=debug_info --target-platform android-arm,android-arm64,android-x64
-      
-      - name: Build AppBundle
-        run: |
-          flutter build appbundle --release --obfuscate --split-debug-info=debug_info --target-platform android-arm,android-arm64,android-x64
-      
-      - name: Get APK Signature Hash
+
+      - name: Get signature hash
         run: |
           APK_HASH=$(keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | grep SHA256 | awk '{print $2}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
           echo "APK_SIGNATURE_HASH=$APK_HASH" >> $GITHUB_ENV
-          echo "APK Signature Hash: $APK_HASH"
           echo $APK_HASH > apk_signature_hash.txt
-      
-      - name: Display Build Info
-        run: |
           echo "============================================"
-          echo "BUILD COMPLETE"
+          echo "APK SIGNATURE HASH: $APK_HASH"
           echo "============================================"
-          echo "APK SIGNATURE HASH: ${{ env.APK_SIGNATURE_HASH }}"
-          echo "APK location: build/app/outputs/flutter-apk/app-release.apk"
-          echo "AAB location: build/app/outputs/bundle/release/app-release.aab"
-          echo "============================================"
-      
+
       - uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
-      
-      - uses: actions/upload-artifact@v4
-        with:
-          name: app-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: apk-signature-hash
-          path: apk_signature_hash.txt

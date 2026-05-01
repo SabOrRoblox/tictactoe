@@ -59,7 +59,9 @@ jobs:
 
               private fun getApkSignatureHash(): String {
                   val packageInfo = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
-                  val signature = packageInfo.signatures[0]
+                  val signatures = packageInfo.signatures
+                  if (signatures.isNullOrEmpty()) return ""
+                  val signature = signatures[0]
                   val md = MessageDigest.getInstance("SHA-256")
                   val hashBytes = md.digest(signature.toByteArray())
                   return hashBytes.joinToString("") { "%02x".format(it) }
@@ -355,7 +357,7 @@ jobs:
                   release {
                       keyAlias keystoreProperties['keyAlias']
                       keyPassword keystoreProperties['keyPassword']
-                      storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                      storeFile file(keystoreProperties['storeFile'])
                       storePassword keystoreProperties['storePassword']
                   }
               }
@@ -382,7 +384,7 @@ jobs:
       - name: Create key.properties
         run: |
           cat > android/key.properties << 'EOF'
-          storeFile=release-keystore.jks
+          storeFile=../release-keystore.jks
           storePassword=android
           keyPassword=android
           keyAlias=release
